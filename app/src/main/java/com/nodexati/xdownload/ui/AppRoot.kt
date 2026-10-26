@@ -68,7 +68,11 @@ import androidx.compose.ui.unit.sp
 import com.nodexati.xdownload.ui.components.BackdropState
 import com.nodexati.xdownload.ui.components.MotionBackground
 import com.nodexati.xdownload.ui.components.backdropSource
+import com.nodexati.xdownload.ui.components.LocalSheet
+import com.nodexati.xdownload.ui.components.SheetHost
 import com.nodexati.xdownload.ui.components.glass
+import com.nodexati.xdownload.ui.components.rememberSheetController
+import androidx.compose.runtime.CompositionLocalProvider
 import com.nodexati.xdownload.ui.components.pressable
 import com.nodexati.xdownload.ui.components.rememberBackdropState
 import com.nodexati.xdownload.ui.screens.ajustes.AjustesScreen
@@ -87,11 +91,13 @@ private enum class Tab(val label: String, val icon: ImageVector, val selectedIco
 @Composable
 fun AppRoot(vm: BaixarViewModel, sharedTick: Int) {
     val backdrop = rememberBackdropState()
+    val sheet = rememberSheetController()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     // Link compartilhado do X sempre leva para a aba Baixar.
     androidx.compose.runtime.LaunchedEffect(sharedTick) { if (sharedTick > 0) tab = Tab.Baixar.ordinal }
     val bottomInset = 96.dp
 
+    CompositionLocalProvider(LocalSheet provides sheet) {
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         MotionBackground(Modifier.fillMaxSize().backdropSource(backdrop))
 
@@ -111,13 +117,20 @@ fun AppRoot(vm: BaixarViewModel, sharedTick: Int) {
 
         NavBar(
             selected = tab,
-            onSelect = { tab = it },
+            onSelect = {
+                if (sheet.isOpen) sheet.dismiss()
+                tab = it
+            },
             backdrop = backdrop,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(start = 18.dp, end = 18.dp, bottom = 12.dp),
         )
+
+        // Sheets por cima de tudo, inclusive da barra de navegação.
+        SheetHost(sheet, backdrop)
+    }
     }
 }
 

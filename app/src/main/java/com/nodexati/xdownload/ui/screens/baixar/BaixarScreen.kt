@@ -97,6 +97,7 @@ import com.nodexati.xdownload.data.XLink
 import com.nodexati.xdownload.settings.AppSettings
 import com.nodexati.xdownload.ui.components.BackdropState
 import com.nodexati.xdownload.ui.components.ErrorLine
+import com.nodexati.xdownload.ui.components.LocalSheet
 import com.nodexati.xdownload.ui.components.PrimaryButton
 import com.nodexati.xdownload.ui.components.glass
 import com.nodexati.xdownload.ui.components.pressable
@@ -114,7 +115,6 @@ fun BaixarScreen(vm: BaixarViewModel, backdrop: BackdropState, bottomInset: Dp) 
     val context = LocalContext.current
     val settings = AppSettings.get(context)
     val clipboardLink = rememberClipboardLink(enabled = settings.readClipboard && vm.link.isBlank())
-    val idle = vm.step is BaixarStep.Idle
 
     Column(
         Modifier
@@ -124,18 +124,15 @@ fun BaixarScreen(vm: BaixarViewModel, backdrop: BackdropState, bottomInset: Dp) 
             .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = bottomInset + 24.dp),
     ) {
         Mark(Modifier.reveal(0))
-
-        // Com o vídeo aberto, o título encolhe e o resultado sobe.
-        val headTop by androidx.compose.animation.core.animateDpAsState(if (idle) 72.dp else 28.dp, spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow), label = "headTop")
-        Spacer(Modifier.height(headTop))
+        Spacer(Modifier.height(72.dp))
         Text(
             text = "Cole o link.\nBaixe o vídeo.",
-            fontSize = if (idle) 34.sp else 26.sp,
-            lineHeight = if (idle) 38.sp else 30.sp,
+            fontSize = 34.sp,
+            lineHeight = 38.sp,
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = (-0.5).sp,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.reveal(1).padding(start = 2.dp).animateContentSize(),
+            modifier = Modifier.reveal(1).padding(start = 2.dp),
         )
         Spacer(Modifier.height(20.dp))
 
@@ -150,39 +147,44 @@ fun BaixarScreen(vm: BaixarViewModel, backdrop: BackdropState, bottomInset: Dp) 
         }
 
         AnimatedVisibility(
-            visible = idle && vm.error == null,
+            visible = vm.error == null,
             enter = fadeIn(tween(240)),
             exit = fadeOut(tween(120)),
         ) {
-            Column {
-                if (clipboardLink != null) {
-                    ClipboardHint(clipboardLink, onUse = { vm.onShared(clipboardLink) }, modifier = Modifier.padding(top = 14.dp))
-                } else {
-                    Text(
-                        text = "Ou toque em Compartilhar no app do X e escolha XDownload.",
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.reveal(3).padding(start = 6.dp, top = 14.dp),
-                    )
-                }
+            if (clipboardLink != null) {
+                ClipboardHint(clipboardLink, onUse = { vm.onShared(clipboardLink) }, modifier = Modifier.padding(top = 14.dp))
+            } else {
+                Text(
+                    text = "Ou toque em Compartilhar no app do X e escolha XDownload.",
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.reveal(3).padding(start = 6.dp, top = 14.dp),
+                )
             }
         }
+    }
 
-        Spacer(Modifier.height(20.dp))
-        AnimatedContent(
-            targetState = vm.step,
-            contentKey = { it::class },
-            transitionSpec = {
-                (fadeIn(tween(280, delayMillis = 80)) + slideInVertically(tween(360)) { it / 10 }) togetherWith fadeOut(tween(120))
-            },
-            label = "baixarStep",
-        ) { current ->
-            when (current) {
-                is BaixarStep.Ready -> Result(vm, current.post, backdrop)
-                BaixarStep.Loading -> Skeleton(backdrop)
-                BaixarStep.Idle -> Spacer(Modifier.height(1.dp))
+    // O vídeo encontrado abre num bottom sheet; fechar o sheet volta para o campo.
+    val sheet = LocalSheet.current
+    val open = vm.step !is BaixarStep.Idle
+    LaunchedEffect(open) {
+        if (open) {
+            sheet.show(onDismiss = vm::reset) {
+                AnimatedContent(
+                    targetState = vm.step,
+                    contentKey = { it::class },
+                    transitionSpec = { fadeIn(tween(260, delayMillis = 60)) togetherWith fadeOut(tween(100)) },
+                    label = "sheetStep",
+                ) { current ->
+                    when (current) {
+                        is BaixarStep.Ready -> Result(vm, current.post)
+                        else -> Skeleton()
+                    }
+                }
             }
+        } else if (sheet.isOpen) {
+            sheet.dismiss()
         }
     }
 }
@@ -336,19 +338,19 @@ private fun ClipboardHint(link: String, onUse: () -> Unit, modifier: Modifier = 
 }
 
 @Composable
-private fun Skeleton(backdrop: BackdropState) {
+private fun Skeleton() {
     val pulse = rememberInfiniteTransition(label = "skeleton")
     val alpha by pulse.animateFloat(0.04f, 0.10f, infiniteRepeatable(tween(750), RepeatMode.Reverse), label = "skeletonAlpha")
     val block = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f).glass(backdrop, RoundedCornerShape(28.dp)).background(block))
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(24.dp)).background(block))
         Box(Modifier.width(220.dp).height(12.dp).clip(CircleShape).background(block))
         Box(Modifier.width(160.dp).height(12.dp).clip(CircleShape).background(block))
     }
 }
 
 @Composable
-private fun Result(vm: BaixarViewModel, post: PostInfo, backdrop: BackdropState) {
+private fun Result(vm: BaixarViewModel, post: PostInfo) {
     val context = LocalContext.current
     val media = post.videos[vm.selectedVideo.coerceIn(0, post.videos.lastIndex)]
     val variant = media.variants[vm.selectedVariant.coerceIn(0, media.variants.lastIndex)]
@@ -375,7 +377,6 @@ private fun Result(vm: BaixarViewModel, post: PostInfo, backdrop: BackdropState)
                 options = post.videos.mapIndexed { i, v -> if (v.kind == MediaKind.Gif) "GIF ${i + 1}" else "Vídeo ${i + 1}" },
                 selected = vm.selectedVideo,
                 onSelect = vm::selectVideo,
-                backdrop = backdrop,
                 modifier = Modifier.reveal(2),
             )
         }
@@ -385,7 +386,6 @@ private fun Result(vm: BaixarViewModel, post: PostInfo, backdrop: BackdropState)
             options = media.variants.map { it.label },
             selected = vm.selectedVariant,
             onSelect = vm::selectVariant,
-            backdrop = backdrop,
             modifier = Modifier.reveal(2),
         )
         Text(
@@ -416,7 +416,7 @@ private fun Poster(post: PostInfo, media: VideoMedia, modifier: Modifier = Modif
         modifier
             .fillMaxWidth()
             .aspectRatio(16f / 10f)
-            .clip(RoundedCornerShape(28.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
     ) {
         AsyncImage(model = media.thumbnail, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -473,17 +473,17 @@ private fun Poster(post: PostInfo, media: VideoMedia, modifier: Modifier = Modif
 
 /** Escolha em linha: pílulas de vidro, a escolhida em azul. */
 @Composable
-private fun Pills(options: List<String>, selected: Int, onSelect: (Int) -> Unit, backdrop: BackdropState, modifier: Modifier = Modifier) {
+private fun Pills(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEachIndexed { index, label ->
             val active = index == selected
             val fg by animateColorAsState(if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, tween(200), label = "pillFg")
-            val fill by animateColorAsState(if (active) MaterialTheme.colorScheme.primary else Color.Transparent, tween(200), label = "pillBg")
+            val fill by animateColorAsState(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f), tween(200), label = "pillBg")
             Box(
                 Modifier
                     .height(42.dp)
-                    .glass(backdrop, CircleShape, veil = 0.6f)
-                    .background(fill, CircleShape)
+                    .clip(CircleShape)
+                    .background(fill)
                     .pressable(onClick = { onSelect(index) }, pressedScale = 0.92f)
                     .padding(horizontal = 18.dp),
                 contentAlignment = Alignment.Center,
