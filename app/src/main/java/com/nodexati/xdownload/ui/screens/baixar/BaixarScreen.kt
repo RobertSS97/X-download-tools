@@ -56,7 +56,6 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Gif
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
@@ -75,7 +74,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -104,6 +102,7 @@ import com.nodexati.xdownload.ui.components.startOfToday
 import com.nodexati.xdownload.ui.components.todayLabel
 import com.nodexati.xdownload.ui.components.LocalSheet
 import com.nodexati.xdownload.ui.components.PrimaryButton
+import com.nodexati.xdownload.ui.components.VideoPlayer
 import com.nodexati.xdownload.ui.components.glass
 import com.nodexati.xdownload.ui.components.pressable
 import com.nodexati.xdownload.ui.components.reveal
@@ -400,66 +399,55 @@ private fun Result(vm: BaixarViewModel, post: PostInfo) {
     }
 }
 
-/** Capa do vídeo com o autor por cima, sobre um degradê escuro. */
+/**
+ * Pré-visualização: o vídeo toca aqui mesmo antes de baixar. Usa uma versão leve
+ * (até 720p) para começar rápido; o autor fica por cima da capa até dar play.
+ */
 @Composable
 private fun Poster(post: PostInfo, media: VideoMedia, modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .fillMaxWidth()
-            .aspectRatio(16f / 10f)
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
-    ) {
-        AsyncImage(model = media.thumbnail, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.7f)))
-        )
-        Icon(
-            if (media.kind == MediaKind.Gif) Icons.Rounded.Gif else Icons.Rounded.PlayArrow,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(52.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.18f))
-                .padding(12.dp),
-        )
-        Row(
-            Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AsyncImage(
-                model = post.authorAvatar,
-                contentDescription = null,
-                modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)),
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(post.authorName.ifBlank { "Post do X" }, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (post.authorHandle.isNotBlank()) {
-                    Text("@${post.authorHandle}", fontSize = 12.sp, color = Color.White.copy(alpha = 0.75f), maxLines = 1)
+    val preview = media.variants.firstOrNull { minOf(it.width, it.height).let { side -> side in 1..720 } } ?: media.variants.last()
+    VideoPlayer(
+        source = preview.url,
+        thumbnail = media.thumbnail,
+        gif = media.kind == MediaKind.Gif,
+        modifier = modifier,
+        overlay = {
+            Box(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AsyncImage(
+                        model = post.authorAvatar,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(post.authorName.ifBlank { "Post do X" }, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (post.authorHandle.isNotBlank()) {
+                            Text("@${post.authorHandle}", fontSize = 12.sp, color = Color.White.copy(alpha = 0.75f), maxLines = 1)
+                        }
+                    }
+                    media.durationMs?.let {
+                        Text(
+                            formatDuration(it),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.18f))
+                                .padding(horizontal = 9.dp, vertical = 4.dp),
+                        )
+                    }
                 }
             }
-            media.durationMs?.let {
-                Text(
-                    formatDuration(it),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.18f))
-                        .padding(horizontal = 9.dp, vertical = 4.dp),
-                )
-            }
-        }
-    }
+        },
+    )
 }
 
 /** Escolha em linha: pílulas de vidro, a escolhida em azul. */

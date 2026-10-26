@@ -62,6 +62,7 @@ import com.nodexati.xdownload.ui.components.startOfToday
 import com.nodexati.xdownload.ui.components.todayLabel
 import com.nodexati.xdownload.ui.components.PrimaryButton
 import com.nodexati.xdownload.ui.components.StatusBanner
+import com.nodexati.xdownload.ui.components.VideoPlayer
 import com.nodexati.xdownload.ui.components.glass
 import com.nodexati.xdownload.ui.components.pressable
 import com.nodexati.xdownload.ui.components.reveal
@@ -267,7 +268,12 @@ private fun Cover(entry: HistoryEntry, modifier: Modifier, shape: androidx.compo
 @Composable
 private fun EntrySheet(entry: HistoryEntry, uri: Uri?, onOpenPost: () -> Unit, onRemove: () -> Unit) {
     val context = LocalContext.current
-    Cover(entry, Modifier.fillMaxWidth().aspectRatio(16f / 10f), RoundedCornerShape(24.dp), small = false)
+    // Toca o arquivo baixado aqui mesmo; sem o arquivo, fica só a capa.
+    if (uri != null) {
+        VideoPlayer(source = uri.toString(), thumbnail = entry.thumbnail)
+    } else {
+        Cover(entry, Modifier.fillMaxWidth().aspectRatio(16f / 10f), RoundedCornerShape(24.dp), small = false)
+    }
     Spacer(Modifier.height(16.dp))
     Text(
         entry.authorName.ifBlank { "Post do X" },
@@ -300,7 +306,7 @@ private fun EntrySheet(entry: HistoryEntry, uri: Uri?, onOpenPost: () -> Unit, o
         Spacer(Modifier.height(12.dp))
     } else {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PrimaryButton(text = "Abrir vídeo", icon = Icons.Rounded.PlayArrow, modifier = Modifier.weight(1f), onClick = { openVideo(context, uri) })
+            PrimaryButton(text = "Abrir em outro app", icon = Icons.AutoMirrored.Rounded.OpenInNew, modifier = Modifier.weight(1f), onClick = { openVideo(context, uri) })
             Box(
                 Modifier
                     .size(56.dp)
