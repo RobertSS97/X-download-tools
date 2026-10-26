@@ -405,6 +405,11 @@ private fun FullscreenPlayer(state: VideoPlayerState, onClose: () -> Unit) {
         val activity = LocalContext.current.findActivity()
         DisposableEffect(Unit) {
             val window = (view.parent as? DialogWindowProvider)?.window
+            // Janela do diálogo ocupando a tela toda, inclusive a área do recorte da câmera.
+            window?.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+            window?.attributes = window?.attributes?.apply {
+                layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
             val controller = window?.let { WindowCompat.getInsetsController(it, view) }
             controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller?.hide(WindowInsetsCompat.Type.systemBars())
