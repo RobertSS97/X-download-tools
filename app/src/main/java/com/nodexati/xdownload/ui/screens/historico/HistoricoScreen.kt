@@ -55,11 +55,13 @@ import com.nodexati.xdownload.data.Downloader
 import com.nodexati.xdownload.data.HistoryEntry
 import com.nodexati.xdownload.data.HistoryStore
 import com.nodexati.xdownload.ui.components.BackdropState
+import com.nodexati.xdownload.ui.components.HeaderCard
+import com.nodexati.xdownload.ui.components.HeaderStat
 import com.nodexati.xdownload.ui.components.LocalSheet
+import com.nodexati.xdownload.ui.components.startOfToday
+import com.nodexati.xdownload.ui.components.todayLabel
 import com.nodexati.xdownload.ui.components.PrimaryButton
-import com.nodexati.xdownload.ui.components.RoundIconButton
 import com.nodexati.xdownload.ui.components.StatusBanner
-import com.nodexati.xdownload.ui.components.ScreenHeader
 import com.nodexati.xdownload.ui.components.glass
 import com.nodexati.xdownload.ui.components.pressable
 import com.nodexati.xdownload.ui.components.reveal
@@ -82,18 +84,21 @@ fun HistoricoScreen(backdrop: BackdropState, bottomInset: Dp, onGoDownload: () -
 
     LazyColumn(
         Modifier.fillMaxSize().statusBarsPadding(),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 24.dp, bottom = bottomInset + 24.dp),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = bottomInset + 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item(key = "header") {
-            Row(Modifier.reveal(0).padding(start = 6.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                ScreenHeader(
-                    title = "Histórico",
-                    subtitle = if (items.isEmpty()) "Nada baixado ainda" else "${items.size} ${if (items.size == 1) "vídeo baixado" else "vídeos baixados"}",
-                    modifier = Modifier.weight(1f),
-                )
-                if (items.isNotEmpty()) {
-                    RoundIconButton(Icons.Rounded.DeleteOutline, "Limpar histórico", onClick = {
+            val today = startOfToday()
+            val todayCount = items.count { it.createdAt >= today }
+            HeaderCard(
+                title = "Histórico",
+                subtitle = if (items.isEmpty()) "Nada baixado ainda" else todayLabel(),
+                icon = if (items.isEmpty()) Icons.Rounded.VideoLibrary else Icons.Rounded.DeleteOutline,
+                backdrop = backdrop,
+                start = HeaderStat("$todayCount", "hoje"),
+                end = HeaderStat("${items.size}", if (items.size == 1) "vídeo" else "vídeos"),
+                onIconClick = if (items.isEmpty()) null else {
+                    {
                         sheet.show {
                             ConfirmClear(
                                 count = items.size,
@@ -104,9 +109,10 @@ fun HistoricoScreen(backdrop: BackdropState, bottomInset: Dp, onGoDownload: () -
                                 onCancel = sheet::dismiss,
                             )
                         }
-                    })
-                }
-            }
+                    }
+                },
+                modifier = Modifier.reveal(0).padding(bottom = 4.dp),
+            )
         }
 
         if (items.isEmpty()) {

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.TextFields
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -50,7 +51,8 @@ import com.nodexati.xdownload.settings.AppSettings
 import com.nodexati.xdownload.settings.DefaultQuality
 import com.nodexati.xdownload.settings.ThemeMode
 import com.nodexati.xdownload.ui.components.BackdropState
-import com.nodexati.xdownload.ui.components.ScreenHeader
+import com.nodexati.xdownload.ui.components.HeaderCard
+import com.nodexati.xdownload.ui.components.HeaderStat
 import com.nodexati.xdownload.ui.components.SectionLabel
 import com.nodexati.xdownload.ui.components.glass
 import com.nodexati.xdownload.ui.components.pressable
@@ -64,10 +66,18 @@ fun AjustesScreen(backdrop: BackdropState, bottomInset: Dp) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .statusBarsPadding()
-            .padding(start = 18.dp, end = 18.dp, top = 24.dp, bottom = bottomInset + 24.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = bottomInset + 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        ScreenHeader("Ajustes", "Aparência e downloads", Modifier.reveal(0).padding(start = 6.dp, bottom = 6.dp))
+        HeaderCard(
+            title = "Ajustes",
+            subtitle = "XDownload ${BuildConfig.VERSION_NAME}",
+            icon = Icons.Rounded.Tune,
+            backdrop = backdrop,
+            start = HeaderStat(settings.themeMode.label, "tema"),
+            end = HeaderStat(settings.defaultQuality.label, "qualidade"),
+            modifier = Modifier.reveal(0).padding(bottom = 6.dp),
+        )
 
         SectionLabel("Aparência", Modifier.reveal(1))
         Group(backdrop, Modifier.reveal(1)) {

@@ -96,7 +96,12 @@ import com.nodexati.xdownload.data.VideoVariant
 import com.nodexati.xdownload.data.XLink
 import com.nodexati.xdownload.settings.AppSettings
 import com.nodexati.xdownload.ui.components.BackdropState
+import com.nodexati.xdownload.data.HistoryStore
 import com.nodexati.xdownload.ui.components.ErrorLine
+import com.nodexati.xdownload.ui.components.HeaderCard
+import com.nodexati.xdownload.ui.components.HeaderStat
+import com.nodexati.xdownload.ui.components.startOfToday
+import com.nodexati.xdownload.ui.components.todayLabel
 import com.nodexati.xdownload.ui.components.LocalSheet
 import com.nodexati.xdownload.ui.components.PrimaryButton
 import com.nodexati.xdownload.ui.components.glass
@@ -123,18 +128,22 @@ fun BaixarScreen(vm: BaixarViewModel, backdrop: BackdropState, bottomInset: Dp) 
             .statusBarsPadding()
             .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = bottomInset + 24.dp),
     ) {
-        Mark(Modifier.reveal(0))
-        Spacer(Modifier.height(72.dp))
-        Text(
-            text = "Cole o link.\nBaixe o vídeo.",
-            fontSize = 34.sp,
-            lineHeight = 38.sp,
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = (-0.5).sp,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.reveal(1).padding(start = 2.dp),
+        // Cartão do topo, como o "Minha rota": hoje, total e o download em andamento.
+        val history = HistoryStore.get(context).items
+        val today = startOfToday()
+        val todayCount = history.count { it.createdAt >= today }
+        val running = vm.downloads.values.filterIsInstance<DownloadState.Running>().firstOrNull()
+        HeaderCard(
+            title = "Baixar vídeo",
+            subtitle = todayLabel(),
+            icon = Icons.Rounded.Download,
+            backdrop = backdrop,
+            start = HeaderStat("$todayCount", if (todayCount == 1) "baixado hoje" else "baixados hoje"),
+            end = HeaderStat("${history.size}", "no total"),
+            progress = running?.let { it.fraction ?: 0f },
+            modifier = Modifier.reveal(0),
         )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
 
         LinkBar(vm, backdrop, Modifier.reveal(2))
 
@@ -186,24 +195,6 @@ fun BaixarScreen(vm: BaixarViewModel, backdrop: BackdropState, bottomInset: Dp) 
         } else if (sheet.isOpen) {
             sheet.dismiss()
         }
-    }
-}
-
-/** Marca discreta no topo: só o quadrado azul e o nome. */
-@Composable
-private fun Mark(modifier: Modifier = Modifier) {
-    Row(modifier.padding(start = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.primary),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Rounded.Download, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(18.dp))
-        }
-        Spacer(Modifier.width(10.dp))
-        Text("XDownload", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onBackground)
     }
 }
 
