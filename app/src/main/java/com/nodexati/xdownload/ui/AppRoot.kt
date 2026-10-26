@@ -26,10 +26,31 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlin.math.sign
+import kotlinx.coroutines.launch
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,10 +76,11 @@ import com.nodexati.xdownload.ui.screens.baixar.BaixarScreen
 import com.nodexati.xdownload.ui.screens.baixar.BaixarViewModel
 import com.nodexati.xdownload.ui.screens.historico.HistoricoScreen
 
-private enum class Tab(val label: String, val icon: ImageVector) {
-    Baixar("Baixar", Icons.Rounded.Download),
-    Historico("Histórico", Icons.Rounded.History),
-    Ajustes("Ajustes", Icons.Rounded.Tune),
+/** Abas com ícone contornado e a versão cheia para a aba ativa, como no RotaPRO. */
+private enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
+    Baixar("Baixar", Icons.Outlined.FileDownload, Icons.Filled.FileDownload),
+    Historico("Histórico", Icons.Outlined.VideoLibrary, Icons.Filled.VideoLibrary),
+    Ajustes("Ajustes", Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
 /** Estrutura do app: fundo em movimento, telas por cima e a barra de navegação de vidro. */
@@ -99,47 +121,136 @@ fun AppRoot(vm: BaixarViewModel, sharedTick: Int) {
     }
 }
 
-/** Barra flutuante de vidro com a pílula da aba ativa deslizando em mola. */
+/**
+ * Barra de vidro "empurra empurra": a lente azul segue o dedo quando você arrasta pela
+ * barra, estica na direção do movimento e empurra os ícones vizinhos para o lado. Ao
+ * soltar, encaixa na aba mais próxima com uma mola. Tocar numa aba faz a lente deslizar
+ * até ela com o mesmo efeito.
+ */
 @Composable
 private fun NavBar(selected: Int, onSelect: (Int) -> Unit, backdrop: BackdropState, modifier: Modifier = Modifier) {
+    val count = Tab.entries.size
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    // Posição da lente em "abas" (0f = primeira, 1f = segunda…), contínua durante o arrasto.
+    val position = remember { Animatable(selected.toFloat()) }
+    var dragging by remember { mutableStateOf(false) }
+    // Velocidade recente da lente, usada para esticar e achatar.
+    var velocity by remember { mutableFloatStateOf(0f) }
+    var lastHover by remember { mutableIntStateOf(selected) }
+
+    LaunchedEffect(selected) {
+        if (!dragging && position.targetValue != selected.toFloat()) {
+            position.animateTo(selected.toFloat(), spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)) {
+                velocity = this.velocity
+            }
+            velocity = 0f
+        }
+    }
+
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
             .height(68.dp)
-            .glass(backdrop, RoundedCornerShape(28.dp), veil = 0.6f)
+            .glass(backdrop, RoundedCornerShape(34.dp), veil = 0.6f)
             .padding(6.dp),
     ) {
-        val itemWidth = maxWidth / Tab.entries.size
-        val offset by animateDpAsState(itemWidth * selected, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow), label = "navPill")
+        val itemWidth = maxWidth / count
+        val itemPx = with(LocalDensity.current) { itemWidth.toPx() }
+
+        fun settle(target: Int) {
+            scope.launch {
+                position.animateTo(target.toFloat(), spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)) {
+                    velocity = this.velocity
+                }
+                velocity = 0f
+            }
+        }
+
+        val dragModifier = Modifier.pointerInput(count, itemPx) {
+            detectHorizontalDragGestures(
+                onDragStart = { offset ->
+                    dragging = true
+                    // Começa a arrastar de onde o dedo tocou, como se pegasse a lente.
+                    scope.launch { position.animateTo((offset.x / itemPx - 0.5f).coerceIn(0f, count - 1f), spring(stiffness = Spring.StiffnessHigh)) }
+                },
+                onDragEnd = {
+                    dragging = false
+                    val target = position.value.roundToInt().coerceIn(0, count - 1)
+                    if (target != selected) onSelect(target)
+                    settle(target)
+                },
+                onDragCancel = {
+                    dragging = false
+                    settle(selected)
+                },
+                onHorizontalDrag = { change, amount ->
+                    change.consume()
+                    val raw = position.value + amount / itemPx
+                    // Resistência elástica ao passar das pontas.
+                    val next = when {
+                        raw < 0f -> raw / (1f + abs(raw) * 4f)
+                        raw > count - 1f -> (count - 1f) + (raw - (count - 1f)) / (1f + abs(raw - (count - 1f)) * 4f)
+                        else -> raw
+                    }
+                    velocity = amount / itemPx * 60f
+                    scope.launch { position.snapTo(next) }
+                    val hover = next.roundToInt().coerceIn(0, count - 1)
+                    if (hover != lastHover) {
+                        lastHover = hover
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                },
+            )
+        }
+
+        // Lente: estica com a velocidade e achata um pouco na vertical, como gota.
+        val speed = abs(velocity).coerceAtMost(12f) / 12f
+        val stretch by animateFloatAsState(1f + speed * 0.35f + if (dragging) 0.08f else 0f, spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium), label = "lensStretch")
+        val squash by animateFloatAsState(1f - speed * 0.14f, spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium), label = "lensSquash")
         Box(
             Modifier
-                .offset(x = offset)
+                .graphicsLayer {
+                    translationX = position.value * itemPx
+                    scaleX = stretch
+                    scaleY = if (dragging) squash * 1.04f else squash
+                }
                 .width(itemWidth)
                 .fillMaxHeight()
-                .clip(RoundedCornerShape(22.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                .clip(RoundedCornerShape(28.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = if (dragging) 0.20f else 0.14f))
         )
-        Row(Modifier.fillMaxSize()) {
+
+        Row(Modifier.fillMaxSize().then(dragModifier)) {
             Tab.entries.forEachIndexed { index, item ->
+                // Distância da lente até esta aba, em abas: 0 = embaixo da lente.
+                val distance = index - position.value
+                val near = (1f - abs(distance)).coerceIn(0f, 1f)
+                // Os vizinhos são empurrados para longe da lente enquanto ela passa.
+                val push = if (abs(distance) in 0.15f..1.4f) sign(distance) * (1.4f - abs(distance)).coerceAtMost(0.7f) * 10f else 0f
                 val active = index == selected
-                val color by animateColorAsState(
-                    if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    tween(200),
-                    label = "navColor",
-                )
+                val primary = MaterialTheme.colorScheme.primary
+                val idle = MaterialTheme.colorScheme.onSurfaceVariant
+                val color = lerp(idle, primary, near)
                 Column(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(22.dp))
+                        .graphicsLayer {
+                            translationX = push * density
+                            val s = 1f + near * 0.12f
+                            scaleX = s
+                            scaleY = s
+                        }
+                        .clip(RoundedCornerShape(28.dp))
                         .pressable(onClick = { onSelect(index) }, pressedScale = 0.9f),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
                 ) {
-                    Icon(item.icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+                    Icon(if (near > 0.5f) item.selectedIcon else item.icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
                     Text(
                         item.label,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                         color = color,
                     )
